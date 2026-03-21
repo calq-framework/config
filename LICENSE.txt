@@ -1,0 +1,9 @@
+Calq Config is dual-licensed under:
+
+SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-CCL
+
+1. GNU Affero General Public License version 3
+   See: LICENSES/AGPL-3.0-or-later.txt
+
+2. Calq Commercial License (CCL)
+   See: LICENSES/LicenseRef-CCL.txt
