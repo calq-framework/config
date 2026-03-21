@@ -38,6 +38,8 @@ public abstract class ConfigurationItemBase<TItem> : IConfigurationItem<TItem> w
 
     public Task ReloadAsync() => ReloadAsync(_preset);
 
+    public abstract Task SaveAsync();
+
     protected abstract Task ReloadAsync(string preset);
 
     protected void RaiseOnReloaded() => OnReloaded?.Invoke();

@@ -41,7 +41,7 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
     }
 
     protected override async Task ReloadAsync(string preset) {
-        var filePath = Path.Combine(_configDir, $"{typeof(TItem).FullName}.{preset}.json");
+        var filePath = GetFilePath(preset);
         if (!File.Exists(filePath)) {
             RaiseOnReloaded();
             return;
@@ -55,6 +55,15 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
 
         RaiseOnReloaded();
     }
+
+    public override async Task SaveAsync() {
+        var filePath = GetFilePath(Preset);
+        var json = JsonSerializer.Serialize(Item, _jsonOptions);
+        await File.WriteAllTextAsync(filePath, json);
+    }
+
+    private string GetFilePath(string preset) =>
+        Path.Combine(_configDir, $"{typeof(TItem).FullName}.{preset}.json");
 
     private void PopulateItem(Stream stream) {
         var typeInfo = (JsonTypeInfo<TItem>)_jsonOptions.GetTypeInfo(typeof(TItem));
@@ -70,7 +79,7 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
 
             var existingValue = propInfo.Get?.Invoke(Item);
             if (existingValue is not null && IsCollection(propInfo.PropertyType)) {
-                AppendToCollection(existingValue, jsonProp.Value, propInfo.PropertyType);
+                ReplaceCollection(existingValue, jsonProp.Value, propInfo.PropertyType);
             } else {
                 var value = jsonProp.Value.Deserialize(propInfo.PropertyType, _jsonOptions);
                 propInfo.Set!(Item, value);
@@ -81,8 +90,9 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
     private static bool IsCollection(Type type) =>
         type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(type);
 
-    private void AppendToCollection(object existing, JsonElement jsonElement, Type collectionType) {
+    private void ReplaceCollection(object existing, JsonElement jsonElement, Type collectionType) {
         if (existing is IDictionary dict) {
+            dict.Clear();
             var deserialized = jsonElement.Deserialize(collectionType, _jsonOptions) as IDictionary;
             if (deserialized is not null) {
                 foreach (DictionaryEntry entry in deserialized) {
@@ -95,6 +105,14 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
         // List<T>, HashSet<T>, etc.
         var elementType = collectionType.GetGenericArguments().FirstOrDefault();
         if (elementType is null) return;
+
+        // Clear existing collection
+        var clearMethod = collectionType.GetMethod("Clear")
+            ?? collectionType.GetInterfaces()
+                .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>))
+                .Select(i => i.GetMethod("Clear"))
+                .FirstOrDefault();
+        clearMethod?.Invoke(existing, null);
 
         var listType = typeof(List<>).MakeGenericType(elementType);
         var items = jsonElement.Deserialize(listType, _jsonOptions) as IList;

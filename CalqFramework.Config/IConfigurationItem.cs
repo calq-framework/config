@@ -8,6 +8,7 @@ public interface IConfigurationItem {
     string Preset { get; set; }
     IEnumerable<string> AvailablePresets { get; }
     Task ReloadAsync();
+    Task SaveAsync();
     event Action? OnReloaded;
 }
 
