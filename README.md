@@ -135,13 +135,13 @@ class FieldConfig {
 
 **Supported types:**
 
-Type conversion is handled by System.Text.Json, supporting:
+Type conversion is handled by Newtonsoft.Json, supporting:
 - Primitives (`bool`, `byte`, `sbyte`, `char`, `decimal`, `double`, `float`, `int`, `uint`, `long`, `ulong`, `short`, `ushort`), `string`, `DateTime`
 - Enums (case-insensitive matching)
 - Nullable versions of all the above
 - Collections: `List<T>`, `HashSet<T>`, `Dictionary<TKey, TValue>`, and other `IEnumerable<T>` types
 - Nested objects (deserialized recursively)
-- Any type serializable by System.Text.Json
+- Any type serializable by Newtonsoft.Json
 
 **Key points:**
 - Property name matching is case-insensitive
@@ -343,7 +343,7 @@ item.Item.Port = 9090;
 await item.SaveAsync();
 ```
 
-The file is written using System.Text.Json serialization with the same options used for deserialization (case-insensitive, fields included).
+The file is written using Newtonsoft.Json serialization with the same options used for deserialization (case-insensitive, fields included).
 
 **Key points:**
 - `SaveAsync()` overwrites the entire file with the current POCO state

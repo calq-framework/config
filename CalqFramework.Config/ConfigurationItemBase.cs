@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-
 namespace CalqFramework.Config;
 
 /// <summary>
@@ -11,13 +9,14 @@ public abstract class ConfigurationItemBase<TItem>(string preset) : IConfigurati
 
     private string _preset = preset;
 
-    public TItem Item { get; } = new TItem();
+    public TItem Item { get; } = new();
+
     public string? PresetGroup { get; } = s_presetGroupCache.GetOrAdd(
-            typeof(TItem),
-            static t => t.GetCustomAttributes(typeof(PresetGroupAttribute), false)
-                .OfType<PresetGroupAttribute>()
-                .FirstOrDefault()
-                ?.PropertyName);
+        typeof(TItem),
+        static t => t.GetCustomAttributes(typeof(PresetGroupAttribute), false)
+            .OfType<PresetGroupAttribute>()
+            .FirstOrDefault()
+            ?.PropertyName);
 
     public string Preset {
         get => _preset;

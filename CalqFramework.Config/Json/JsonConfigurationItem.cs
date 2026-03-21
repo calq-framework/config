@@ -1,7 +1,8 @@
 using System.Collections;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
+using System.Reflection;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 
 namespace CalqFramework.Config.Json;
 
@@ -11,15 +12,14 @@ namespace CalqFramework.Config.Json;
 /// </summary>
 public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where TItem : class, new() {
     private readonly string _configDir;
-    private readonly JsonSerializerOptions _jsonOptions;
+    private readonly JsonSerializerSettings _jsonSettings;
 
     public JsonConfigurationItem(string configDir, string preset) : base(preset) {
         _configDir = configDir;
-        _jsonOptions = new JsonSerializerOptions {
-            PropertyNameCaseInsensitive = true,
-            IncludeFields = true,
-            PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate,
-            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+        _jsonSettings = new JsonSerializerSettings {
+            ContractResolver = new DefaultContractResolver {
+                NamingStrategy = null // preserve original casing
+            }
         };
     }
 
@@ -34,8 +34,7 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
             return Directory.EnumerateFiles(_configDir, pattern)
                 .Select(f => {
                     string fileName = Path.GetFileName(f);
-                    // Remove "{TypeName}." prefix and ".json" suffix
-                    string presetName = fileName[(typeName!.Length + 1)..^5];
+                    string presetName = fileName.Substring(typeName!.Length + 1, fileName.Length - typeName.Length - 1 - 5);
                     return presetName;
                 });
         }
@@ -48,10 +47,13 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
             return;
         }
 
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        string json;
+        using (var reader = new StreamReader(new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))) {
+            json = await reader.ReadToEndAsync();
+        }
 
         lock (Item) {
-            PopulateItem(stream);
+            PopulateItem(json);
         }
 
         RaiseOnReloaded();
@@ -59,32 +61,44 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
 
     public override async Task SaveAsync() {
         string filePath = GetFilePath(Preset);
-        string json = JsonSerializer.Serialize(Item, _jsonOptions);
+        string json = JsonConvert.SerializeObject(Item, Formatting.None, _jsonSettings);
         await File.WriteAllTextAsync(filePath, json);
     }
 
     private string GetFilePath(string preset) =>
         Path.Combine(_configDir, $"{typeof(TItem).FullName}.{preset}.json");
 
-    private void PopulateItem(Stream stream) {
-        var typeInfo = (JsonTypeInfo<TItem>)_jsonOptions.GetTypeInfo(typeof(TItem));
+    private void PopulateItem(string json) {
+        JObject obj = JObject.Parse(json);
 
-        using var doc = JsonDocument.Parse(stream);
-        JsonElement root = doc.RootElement;
+        foreach (JProperty jsonProp in obj.Properties()) {
+            // Try property first (case-insensitive)
+            PropertyInfo? prop = typeof(TItem).GetProperty(jsonProp.Name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
 
-        foreach (JsonProperty jsonProp in root.EnumerateObject()) {
-            JsonPropertyInfo? propInfo = typeInfo.Properties.FirstOrDefault(p => string.Equals(p.Name, jsonProp.Name, StringComparison.OrdinalIgnoreCase));
+            if (prop is not null && prop.CanWrite && prop.CanRead) {
+                object? existingValue = prop.GetValue(Item);
+                if (existingValue is not null && IsCollection(prop.PropertyType)) {
+                    ReplaceCollection(existingValue, jsonProp.Value, prop.PropertyType);
+                } else {
+                    object? value = jsonProp.Value.ToObject(prop.PropertyType);
+                    prop.SetValue(Item, value);
+                }
 
-            if (propInfo is null) {
                 continue;
             }
 
-            object? existingValue = propInfo.Get?.Invoke(Item);
-            if (existingValue is not null && IsCollection(propInfo.PropertyType)) {
-                ReplaceCollection(existingValue, jsonProp.Value, propInfo.PropertyType);
-            } else {
-                object? value = jsonProp.Value.Deserialize(propInfo.PropertyType, _jsonOptions);
-                propInfo.Set!(Item, value);
+            // Try field (case-insensitive)
+            FieldInfo? field = typeof(TItem).GetFields(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(f => string.Equals(f.Name, jsonProp.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (field is not null) {
+                object? existingValue = field.GetValue(Item);
+                if (existingValue is not null && IsCollection(field.FieldType)) {
+                    ReplaceCollection(existingValue, jsonProp.Value, field.FieldType);
+                } else {
+                    object? value = jsonProp.Value.ToObject(field.FieldType);
+                    field.SetValue(Item, value);
+                }
             }
         }
     }
@@ -92,10 +106,10 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
     private static bool IsCollection(Type type) =>
         type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(type);
 
-    private void ReplaceCollection(object existing, JsonElement jsonElement, Type collectionType) {
+    private static void ReplaceCollection(object existing, JToken jsonToken, Type collectionType) {
         if (existing is IDictionary dict) {
             dict.Clear();
-            var deserialized = jsonElement.Deserialize(collectionType, _jsonOptions) as IDictionary;
+            var deserialized = jsonToken.ToObject(collectionType) as IDictionary;
             if (deserialized is not null) {
                 foreach (DictionaryEntry entry in deserialized) {
                     dict[entry.Key] = entry.Value;
@@ -105,7 +119,6 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
             return;
         }
 
-        // List<T>, HashSet<T>, etc.
         Type? elementType = collectionType.GetGenericArguments()
             .FirstOrDefault();
         if (elementType is null) {
@@ -113,25 +126,33 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
         }
 
         // Clear existing collection
-        System.Reflection.MethodInfo? clearMethod = collectionType.GetMethod("Clear") ?? collectionType.GetInterfaces()
+        MethodInfo? clearMethod = collectionType.GetMethod("Clear") ?? collectionType.GetInterfaces()
             .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>))
             .Select(i => i.GetMethod("Clear"))
             .FirstOrDefault();
         clearMethod?.Invoke(existing, null);
 
         Type listType = typeof(List<>).MakeGenericType(elementType);
-        if (jsonElement.Deserialize(listType, _jsonOptions) is not IList items) {
+        if (jsonToken.ToObject(listType) is not IList items) {
             return;
         }
 
-        System.Reflection.MethodInfo? addMethod = collectionType.GetMethod("Add", [elementType]) ?? collectionType.GetInterfaces()
+        MethodInfo? addMethod = collectionType.GetMethod(
+            "Add",
+            [
+                elementType
+            ]) ?? collectionType.GetInterfaces()
             .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>))
             .Select(i => i.GetMethod("Add"))
             .FirstOrDefault();
 
         if (addMethod is not null) {
             foreach (object? item in items) {
-                addMethod.Invoke(existing, [item]);
+                addMethod.Invoke(
+                    existing,
+                    new[] {
+                        item
+                    });
             }
         }
     }

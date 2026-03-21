@@ -1,4 +1,4 @@
-using System.Text.Json;
+using Newtonsoft.Json;
 using CalqFramework.Config.Json;
 
 namespace CalqFramework.Config.Tests;
@@ -125,7 +125,7 @@ public class JsonConfigurationItemTests : IDisposable {
         await item.SaveAsync();
 
         string json = await File.ReadAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.CollectionConfig.default.json"));
-        CollectionConfig? reloaded = JsonSerializer.Deserialize<CollectionConfig>(json);
+        CollectionConfig? reloaded = JsonConvert.DeserializeObject<CollectionConfig>(json);
 
         Assert.Equal(2, reloaded!.Tags.Count);
         Assert.Contains("alpha", reloaded.Tags);
