@@ -1,5 +1,3 @@
-using CalqFramework.Config;
-
 namespace CalqFramework.Config.Tests;
 
 public class MasterPreset {
@@ -26,12 +24,14 @@ public class SimpleConfig {
 }
 
 public class CollectionConfig {
-    public List<string> Tags { get; set; } = new();
-    public Dictionary<string, int> Scores { get; set; } = new();
-    public HashSet<string> Roles { get; set; } = new();
+    public List<string> Tags { get; set; } = [];
+    public Dictionary<string, int> Scores { get; set; } = [];
+    public HashSet<string> Roles { get; set; } = [];
 }
 
 public class FieldConfig {
-    public string Name = "";
+#pragma warning disable CA1051
     public int Count;
+    public string Name = "";
+#pragma warning restore CA1051
 }
