@@ -6,29 +6,30 @@ namespace CalqFramework.Config;
 ///     Abstract base for configuration items. Handles preset group attribute caching,
 ///     item instantiation, and preset-change-triggered reloads.
 /// </summary>
-public abstract class ConfigurationItemBase<TItem> : IConfigurationItem<TItem> where TItem : class, new() {
-    private static readonly ConcurrentDictionary<Type, string?> PresetGroupCache = new();
+public abstract class ConfigurationItemBase<TItem>(string preset) : IConfigurationItem<TItem> where TItem : class, new() {
+    private static readonly ConcurrentDictionary<Type, string?> s_presetGroupCache = new();
 
-    private string _preset;
+    private string _preset = preset;
 
-    protected ConfigurationItemBase(string preset) {
-        _preset = preset;
-        Item = new TItem();
-        PresetGroup = PresetGroupCache.GetOrAdd(typeof(TItem), static t =>
-            t.GetCustomAttributes(typeof(PresetGroupAttribute), false)
+    public TItem Item { get; } = new TItem();
+    public string? PresetGroup { get; } = s_presetGroupCache.GetOrAdd(
+            typeof(TItem),
+            static t => t.GetCustomAttributes(typeof(PresetGroupAttribute), false)
                 .OfType<PresetGroupAttribute>()
-                .FirstOrDefault()?.PropertyName);
-    }
-
-    public TItem Item { get; }
-    public string? PresetGroup { get; }
+                .FirstOrDefault()
+                ?.PropertyName);
 
     public string Preset {
         get => _preset;
         set {
-            if (_preset == value) return;
+            if (_preset == value) {
+                return;
+            }
+
             _preset = value;
-            ReloadAsync(value).GetAwaiter().GetResult();
+            ReloadAsync(value)
+                .GetAwaiter()
+                .GetResult();
         }
     }
 

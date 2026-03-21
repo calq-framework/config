@@ -25,23 +25,24 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
 
     public override IEnumerable<string> AvailablePresets {
         get {
-            var typeName = typeof(TItem).FullName;
-            var pattern = $"{typeName}.*.json";
-            if (!Directory.Exists(_configDir))
+            string? typeName = typeof(TItem).FullName;
+            string pattern = $"{typeName}.*.json";
+            if (!Directory.Exists(_configDir)) {
                 return [];
+            }
 
             return Directory.EnumerateFiles(_configDir, pattern)
                 .Select(f => {
-                    var fileName = Path.GetFileName(f);
+                    string fileName = Path.GetFileName(f);
                     // Remove "{TypeName}." prefix and ".json" suffix
-                    var presetName = fileName[(typeName!.Length + 1)..^5];
+                    string presetName = fileName[(typeName!.Length + 1)..^5];
                     return presetName;
                 });
         }
     }
 
     protected override async Task ReloadAsync(string preset) {
-        var filePath = GetFilePath(preset);
+        string filePath = GetFilePath(preset);
         if (!File.Exists(filePath)) {
             RaiseOnReloaded();
             return;
@@ -57,8 +58,8 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
     }
 
     public override async Task SaveAsync() {
-        var filePath = GetFilePath(Preset);
-        var json = JsonSerializer.Serialize(Item, _jsonOptions);
+        string filePath = GetFilePath(Preset);
+        string json = JsonSerializer.Serialize(Item, _jsonOptions);
         await File.WriteAllTextAsync(filePath, json);
     }
 
@@ -69,19 +70,20 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
         var typeInfo = (JsonTypeInfo<TItem>)_jsonOptions.GetTypeInfo(typeof(TItem));
 
         using var doc = JsonDocument.Parse(stream);
-        var root = doc.RootElement;
+        JsonElement root = doc.RootElement;
 
-        foreach (var jsonProp in root.EnumerateObject()) {
-            var propInfo = typeInfo.Properties.FirstOrDefault(p =>
-                string.Equals(p.Name, jsonProp.Name, StringComparison.OrdinalIgnoreCase));
+        foreach (JsonProperty jsonProp in root.EnumerateObject()) {
+            JsonPropertyInfo? propInfo = typeInfo.Properties.FirstOrDefault(p => string.Equals(p.Name, jsonProp.Name, StringComparison.OrdinalIgnoreCase));
 
-            if (propInfo is null) continue;
+            if (propInfo is null) {
+                continue;
+            }
 
-            var existingValue = propInfo.Get?.Invoke(Item);
+            object? existingValue = propInfo.Get?.Invoke(Item);
             if (existingValue is not null && IsCollection(propInfo.PropertyType)) {
                 ReplaceCollection(existingValue, jsonProp.Value, propInfo.PropertyType);
             } else {
-                var value = jsonProp.Value.Deserialize(propInfo.PropertyType, _jsonOptions);
+                object? value = jsonProp.Value.Deserialize(propInfo.PropertyType, _jsonOptions);
                 propInfo.Set!(Item, value);
             }
         }
@@ -99,33 +101,36 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
                     dict[entry.Key] = entry.Value;
                 }
             }
+
             return;
         }
 
         // List<T>, HashSet<T>, etc.
-        var elementType = collectionType.GetGenericArguments().FirstOrDefault();
-        if (elementType is null) return;
+        Type? elementType = collectionType.GetGenericArguments()
+            .FirstOrDefault();
+        if (elementType is null) {
+            return;
+        }
 
         // Clear existing collection
-        var clearMethod = collectionType.GetMethod("Clear")
-            ?? collectionType.GetInterfaces()
-                .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>))
-                .Select(i => i.GetMethod("Clear"))
-                .FirstOrDefault();
+        System.Reflection.MethodInfo? clearMethod = collectionType.GetMethod("Clear") ?? collectionType.GetInterfaces()
+            .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>))
+            .Select(i => i.GetMethod("Clear"))
+            .FirstOrDefault();
         clearMethod?.Invoke(existing, null);
 
-        var listType = typeof(List<>).MakeGenericType(elementType);
-        var items = jsonElement.Deserialize(listType, _jsonOptions) as IList;
-        if (items is null) return;
+        Type listType = typeof(List<>).MakeGenericType(elementType);
+        if (jsonElement.Deserialize(listType, _jsonOptions) is not IList items) {
+            return;
+        }
 
-        var addMethod = collectionType.GetMethod("Add", [elementType])
-            ?? collectionType.GetInterfaces()
-                .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>))
-                .Select(i => i.GetMethod("Add"))
-                .FirstOrDefault();
+        System.Reflection.MethodInfo? addMethod = collectionType.GetMethod("Add", [elementType]) ?? collectionType.GetInterfaces()
+            .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>))
+            .Select(i => i.GetMethod("Add"))
+            .FirstOrDefault();
 
         if (addMethod is not null) {
-            foreach (var item in items) {
+            foreach (object? item in items) {
                 addMethod.Invoke(existing, [item]);
             }
         }

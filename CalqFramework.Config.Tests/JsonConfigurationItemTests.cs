@@ -4,21 +4,27 @@ using CalqFramework.Config.Json;
 namespace CalqFramework.Config.Tests;
 
 public class JsonConfigurationItemTests : IDisposable {
-    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+    private readonly string _tempDir = Path.Combine(
+        Path.GetTempPath(),
+        Guid.NewGuid()
+            .ToString());
 
     public JsonConfigurationItemTests() => Directory.CreateDirectory(_tempDir);
 
     public void Dispose() {
-        if (Directory.Exists(_tempDir))
+        if (Directory.Exists(_tempDir)) {
             Directory.Delete(_tempDir, true);
+        }
+
+        GC.SuppressFinalize(this);
     }
 
     [Fact]
     public async Task ReloadAsync_PopulatesItemFromJsonFile() {
-        var json = """{"Name":"hello","Value":42}""";
+        string json = """{"Name":"hello","Value":42}""";
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.SimpleConfig.default.json"), json);
 
-        var item = new JsonConfigurationItem<SimpleConfig>(_tempDir, "default");
+        JsonConfigurationItem<SimpleConfig> item = new(_tempDir, "default");
         await item.ReloadAsync();
 
         Assert.Equal("hello", item.Item.Name);
@@ -27,7 +33,7 @@ public class JsonConfigurationItemTests : IDisposable {
 
     [Fact]
     public async Task ReloadAsync_MissingFile_IsNoOp() {
-        var item = new JsonConfigurationItem<SimpleConfig>(_tempDir, "missing");
+        JsonConfigurationItem<SimpleConfig> item = new(_tempDir, "missing");
         await item.ReloadAsync();
 
         Assert.Equal("", item.Item.Name);
@@ -36,11 +42,11 @@ public class JsonConfigurationItemTests : IDisposable {
 
     [Fact]
     public async Task ReloadAsync_FiresOnReloadedEvent() {
-        var json = """{"Name":"test"}""";
+        string json = """{"Name":"test"}""";
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.SimpleConfig.default.json"), json);
 
-        var item = new JsonConfigurationItem<SimpleConfig>(_tempDir, "default");
-        var fired = false;
+        JsonConfigurationItem<SimpleConfig> item = new(_tempDir, "default");
+        bool fired = false;
         item.OnReloaded += () => fired = true;
         await item.ReloadAsync();
 
@@ -49,10 +55,10 @@ public class JsonConfigurationItemTests : IDisposable {
 
     [Fact]
     public async Task ReloadAsync_PopulatesFields() {
-        var json = """{"Name":"fieldTest","Count":7}""";
+        string json = """{"Name":"fieldTest","Count":7}""";
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.FieldConfig.default.json"), json);
 
-        var item = new JsonConfigurationItem<FieldConfig>(_tempDir, "default");
+        JsonConfigurationItem<FieldConfig> item = new(_tempDir, "default");
         await item.ReloadAsync();
 
         Assert.Equal("fieldTest", item.Item.Name);
@@ -65,8 +71,9 @@ public class JsonConfigurationItemTests : IDisposable {
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.SimpleConfig.dark.json"), "{}");
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.SimpleConfig.light.json"), "{}");
 
-        var item = new JsonConfigurationItem<SimpleConfig>(_tempDir, "default");
-        var presets = item.AvailablePresets.OrderBy(x => x).ToList();
+        JsonConfigurationItem<SimpleConfig> item = new(_tempDir, "default");
+        var presets = item.AvailablePresets.OrderBy(x => x)
+            .ToList();
 
         Assert.Equal(3, presets.Count);
         Assert.Contains("dark", presets);
@@ -76,12 +83,12 @@ public class JsonConfigurationItemTests : IDisposable {
 
     [Fact]
     public async Task ReloadAsync_CollectionReplaceBehavior() {
-        var item = new JsonConfigurationItem<CollectionConfig>(_tempDir, "default");
+        JsonConfigurationItem<CollectionConfig> item = new(_tempDir, "default");
         item.Item.Tags.Add("existing");
         item.Item.Scores["old"] = 1;
         item.Item.Roles.Add("admin");
 
-        var json = """{"Tags":["new"],"Scores":{"fresh":99},"Roles":["user"]}""";
+        string json = """{"Tags":["new"],"Scores":{"fresh":99},"Roles":["user"]}""";
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.CollectionConfig.default.json"), json);
         await item.ReloadAsync();
 
@@ -98,11 +105,11 @@ public class JsonConfigurationItemTests : IDisposable {
 
     [Fact]
     public async Task ReferenceIdentity_SameInstanceAfterReload() {
-        var json = """{"Name":"v1"}""";
+        string json = """{"Name":"v1"}""";
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.SimpleConfig.default.json"), json);
 
-        var item = new JsonConfigurationItem<SimpleConfig>(_tempDir, "default");
-        var reference = item.Item;
+        JsonConfigurationItem<SimpleConfig> item = new(_tempDir, "default");
+        SimpleConfig reference = item.Item;
         await item.ReloadAsync();
 
         Assert.Same(reference, item.Item);
@@ -111,14 +118,14 @@ public class JsonConfigurationItemTests : IDisposable {
 
     [Fact]
     public async Task SaveAsync_PersistsListWithItemRemoved() {
-        var item = new JsonConfigurationItem<CollectionConfig>(_tempDir, "default");
+        JsonConfigurationItem<CollectionConfig> item = new(_tempDir, "default");
         item.Item.Tags.AddRange(["alpha", "beta", "gamma"]);
 
         item.Item.Tags.Remove("beta");
         await item.SaveAsync();
 
-        var json = await File.ReadAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.CollectionConfig.default.json"));
-        var reloaded = JsonSerializer.Deserialize<CollectionConfig>(json);
+        string json = await File.ReadAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.CollectionConfig.default.json"));
+        CollectionConfig? reloaded = JsonSerializer.Deserialize<CollectionConfig>(json);
 
         Assert.Equal(2, reloaded!.Tags.Count);
         Assert.Contains("alpha", reloaded.Tags);
@@ -129,10 +136,10 @@ public class JsonConfigurationItemTests : IDisposable {
     [Fact]
     public async Task ReloadAsync_ExternalRemovalReflected() {
         // Start with 3 tags
-        var json = """{"Tags":["alpha","beta","gamma"]}""";
+        string json = """{"Tags":["alpha","beta","gamma"]}""";
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "CalqFramework.Config.Tests.CollectionConfig.default.json"), json);
 
-        var item = new JsonConfigurationItem<CollectionConfig>(_tempDir, "default");
+        JsonConfigurationItem<CollectionConfig> item = new(_tempDir, "default");
         await item.ReloadAsync();
         Assert.Equal(3, item.Item.Tags.Count);
 
