@@ -23,7 +23,14 @@ public class JsonConfigurationRegistry<TPreset> : ConfigurationRegistryBase<TPre
             return baseDir;
         }
 
-        string processName = Environment.ProcessPath is not null ? Path.GetFileNameWithoutExtension(Environment.ProcessPath) : "app";
+#if NET6_0_OR_GREATER
+        string processName = Environment.ProcessPath is not null
+            ? Path.GetFileNameWithoutExtension(Environment.ProcessPath)
+            : "app";
+#else
+        string processName = System.Diagnostics.Process.GetCurrentProcess()
+            .ProcessName;
+#endif
         string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         return Path.Combine(appData, processName!);
     }
