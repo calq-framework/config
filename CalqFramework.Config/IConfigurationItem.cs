@@ -9,6 +9,7 @@ public interface IConfigurationItem {
     IEnumerable<string> AvailablePresets { get; }
     Task ReloadAsync();
     Task SaveAsync();
+    Task SetByPathAsync(string jsonPath, string value);
     event Action? OnReloaded;
 }
 

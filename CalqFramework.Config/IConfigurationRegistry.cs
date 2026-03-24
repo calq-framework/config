@@ -10,5 +10,6 @@ public interface IConfigurationRegistry {
     Task<TItem> LoadAsync<TItem>() where TItem : class, new();
     Task ReloadAsync<TItem>() where TItem : class, new();
     Task SaveAsync<TItem>() where TItem : class, new();
+    Task SetByPathAsync<TItem>(string jsonPath, string value) where TItem : class, new();
     Task ReloadAllAsync();
 }
