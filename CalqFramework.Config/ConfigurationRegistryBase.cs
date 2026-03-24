@@ -33,6 +33,11 @@ public abstract class ConfigurationRegistryBase<TPreset> : IConfigurationRegistr
         }
     }
 
+    public async Task SaveAsync<TItem>() where TItem : class, new() {
+        IConfigurationItem item = await GetOrCreateItemAsync<TItem>();
+        await item.SaveAsync();
+    }
+
     public async Task ReloadAllAsync() {
         // 1. Reload master preset first
         IConfigurationItem masterItem = _items[typeof(TPreset)];

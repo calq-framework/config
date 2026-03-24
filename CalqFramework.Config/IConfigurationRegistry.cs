@@ -9,5 +9,6 @@ public interface IConfigurationRegistry {
     Task<TItem> GetAsync<TItem>() where TItem : class, new();
     Task<TItem> LoadAsync<TItem>() where TItem : class, new();
     Task ReloadAsync<TItem>() where TItem : class, new();
+    Task SaveAsync<TItem>() where TItem : class, new();
     Task ReloadAllAsync();
 }
