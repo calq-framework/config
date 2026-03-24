@@ -25,7 +25,15 @@ public abstract class ConfigurationItemBase<TItem>(string preset) : IConfigurati
                 return;
             }
 
+            string oldPreset = _preset;
             _preset = value;
+            if (!PresetExists(value)) {
+                // Clone current POCO state to the new preset
+                SaveAsync()
+                    .GetAwaiter()
+                    .GetResult();
+            }
+
             ReloadAsync(value)
                 .GetAwaiter()
                 .GetResult();
@@ -43,6 +51,8 @@ public abstract class ConfigurationItemBase<TItem>(string preset) : IConfigurati
     public abstract Task SetByPathAsync(string jsonPath, string value);
 
     protected abstract Task ReloadAsync(string preset);
+
+    protected abstract bool PresetExists(string preset);
 
     protected void RaiseOnReloaded() => OnReloaded?.Invoke();
 }
