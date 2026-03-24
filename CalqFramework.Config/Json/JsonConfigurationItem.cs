@@ -107,6 +107,9 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
     private string GetFilePath(string preset) =>
         Path.Combine(_configDir, $"{typeof(TItem).FullName}.{preset}.json");
 
+    protected override bool PresetExists(string preset) =>
+        File.Exists(GetFilePath(preset));
+
     private void PopulateItem(string json) {
         JObject obj = JObject.Parse(json);
 
