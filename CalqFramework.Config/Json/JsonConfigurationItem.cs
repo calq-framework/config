@@ -65,6 +65,45 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
         await File.WriteAllTextAsync(filePath, json);
     }
 
+    public override async Task SetByPathAsync(string jsonPath, string value) {
+        string filePath = GetFilePath(Preset);
+        string json = File.Exists(filePath) ? await File.ReadAllTextAsync(filePath) : "{}";
+        JObject root = JObject.Parse(json);
+
+        JToken? token = root.SelectToken(jsonPath);
+        if (token != null) {
+            // Preserve existing type
+            JToken newValue = token.Type switch {
+                JTokenType.Integer => long.TryParse(value, out long l) ? new JValue(l) : new JValue(value),
+                JTokenType.Float => double.TryParse(value, out double d) ? new JValue(d) : new JValue(value),
+                JTokenType.Boolean => bool.TryParse(value, out bool b) ? new JValue(b) : new JValue(value),
+                _ => new JValue(value)
+            };
+            token.Replace(newValue);
+        } else {
+            // Create missing path segments
+            string[] segments = jsonPath.Split('.');
+            JObject current = root;
+            for (int i = 0; i < segments.Length - 1; i++) {
+                JToken? child = current[segments[i]];
+                if (child is JObject obj) {
+                    current = obj;
+                } else {
+                    var newObj = new JObject();
+                    current[segments[i]] = newObj;
+                    current = newObj;
+                }
+            }
+            current[segments[^1]] = new JValue(value);
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        await File.WriteAllTextAsync(filePath, root.ToString(Formatting.None));
+
+        // Reload the in-memory POCO to stay in sync
+        await ReloadAsync();
+    }
+
     private string GetFilePath(string preset) =>
         Path.Combine(_configDir, $"{typeof(TItem).FullName}.{preset}.json");
 

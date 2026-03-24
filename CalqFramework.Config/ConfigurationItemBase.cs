@@ -40,6 +40,8 @@ public abstract class ConfigurationItemBase<TItem>(string preset) : IConfigurati
 
     public abstract Task SaveAsync();
 
+    public abstract Task SetByPathAsync(string jsonPath, string value);
+
     protected abstract Task ReloadAsync(string preset);
 
     protected void RaiseOnReloaded() => OnReloaded?.Invoke();

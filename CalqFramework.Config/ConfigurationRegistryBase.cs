@@ -38,6 +38,11 @@ public abstract class ConfigurationRegistryBase<TPreset> : IConfigurationRegistr
         await item.SaveAsync();
     }
 
+    public async Task SetByPathAsync<TItem>(string jsonPath, string value) where TItem : class, new() {
+        IConfigurationItem item = await GetOrCreateItemAsync<TItem>();
+        await item.SetByPathAsync(jsonPath, value);
+    }
+
     public async Task ReloadAllAsync() {
         // 1. Reload master preset first
         IConfigurationItem masterItem = _items[typeof(TPreset)];
