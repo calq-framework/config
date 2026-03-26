@@ -1,9 +1,3 @@
-using System.Collections;
-using System.Reflection;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
-
 namespace CalqFramework.Config.Json;
 
 /// <summary>
@@ -94,6 +88,7 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
                     current = newObj;
                 }
             }
+
             current[segments[^1]] = new JValue(value);
         }
 
@@ -192,9 +187,9 @@ public class JsonConfigurationItem<TItem> : ConfigurationItemBase<TItem> where T
             foreach (object? item in items) {
                 addMethod.Invoke(
                     existing,
-                    new[] {
+                    [
                         item
-                    });
+                    ]);
             }
         }
     }

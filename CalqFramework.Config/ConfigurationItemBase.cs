@@ -25,7 +25,6 @@ public abstract class ConfigurationItemBase<TItem>(string preset) : IConfigurati
                 return;
             }
 
-            string oldPreset = _preset;
             _preset = value;
             if (!PresetExists(value)) {
                 // Clone current POCO state to the new preset

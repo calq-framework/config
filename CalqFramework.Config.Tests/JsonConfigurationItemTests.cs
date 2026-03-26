@@ -1,4 +1,3 @@
-using Newtonsoft.Json;
 using CalqFramework.Config.Json;
 
 namespace CalqFramework.Config.Tests;
