@@ -9,23 +9,18 @@ No manual serialization, no string-based key lookups, no boilerplate.
 ## POCO-First Configuration for .NET
 Calq Config treats your C# classes as the single source of truth. Properties and fields become configuration entries, presets become named file variants, and the framework keeps everything in sync — including cascading reloads across preset groups.
 
-## A Radically Simpler Approach
-
+## How Calq Config Stacks Up
 
 ### Calq Config vs. Microsoft.Extensions.Configuration
 | Feature | Calq Config | Microsoft.Extensions.Configuration |
 | :--- | :--- | :--- |
-| **Configuration Model** | POCO Classes | Key-Value Pairs |
-| **Usage Model** | Standalone | Dependency Injection |
-| **Access Pattern** | Direct Property Access | IOptions&lt;T&gt; / IConfiguration["key"] |
-| **Reference Stability** | Same instance, always current | Snapshots (IOptionsSnapshot) or Singletons (IOptions) |
-| **Named Presets** | Built-in (file-per-preset) | Manual (per-environment files + naming convention) |
-| **Preset Groups** | Built-in (master preset cascading) | ❌ |
+| **Config Objects** | Mutable POCO Singletons | Immutable POCOs (via IOptions binding) |
+| **Live Reload** | ✅ | ✅ |
+| **Named Presets** | ✅ (automatic) | ✅ (manual) |
+| **Preset Groups** | ✅ (master preset cascading) | ❌ |
 | **Preset Switching at Runtime** | ✅ | ❌ |
-| **Live Reload** | ✅ | ✅ (IOptionsMonitor) |
-| **Partial Update by Path** | ✅ (SetByPathAsync) | ❌ |
 | **Save Back to File** | ✅ | ❌ |
-| **Collection Support** | List, Dictionary, HashSet | ❌ (flat key-value binding) |
+| **Save Back to File by JSONPath** | ✅ | ❌ |
 | **Field Support** | ✅ | ❌ |
 | **Learning Curve** | Low | Moderate |
 
@@ -45,22 +40,13 @@ Console.WriteLine(ui.DarkMode); // always current after reloads
 ### Microsoft.Extensions.Configuration
 ```csharp
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
-var builder = new ConfigurationBuilder()
+var configuration = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .Build();
 
-IConfiguration configuration = builder.Build();
-
-var services = new ServiceCollection();
-services.Configure<UiConfig>(configuration.GetSection("UiConfig"));
-services.AddSingleton<IConfiguration>(configuration);
-var provider = services.BuildServiceProvider();
-
-var options = provider.GetRequiredService<IOptions<UiConfig>>();
-UiConfig ui = options.Value;
+var ui = configuration.GetSection("UiConfig").Get<UiConfig>();
 
 Console.WriteLine(ui.Title);
 Console.WriteLine(ui.DarkMode);
