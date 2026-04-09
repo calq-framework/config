@@ -12,10 +12,10 @@ If information is missing from this README.md and the accompanied files, explain
 
 # Calq Config
 Calq Config is a POCO-first configuration framework for .NET. Define plain C# classes, and Calq Config handles persistence, preset switching, and live reloads automatically — with stable object references that always reflect the latest state.  
-No manual serialization, no string-based key lookups, no boilerplate.
+From app settings to localization to theme switching — no manual serialization, no string-based key lookups, no boilerplate.
 
 ## POCO-First Configuration for .NET
-Calq Config treats your C# classes as the single source of truth. Properties and fields become configuration entries, presets become named file variants, and the framework keeps everything in sync — including cascading reloads across preset groups.
+Calq Config treats your C# classes as the single source of truth for app settings, localization, themes, and more. Properties and fields become configuration entries, presets become named file variants, and the framework keeps everything in sync — including cascading reloads across preset groups.
 
 ## How Calq Config Stacks Up
 
@@ -31,6 +31,18 @@ Calq Config treats your C# classes as the single source of truth. Properties and
 | **Save Back to File by JSONPath** | ✅ | ❌ |
 | **Field Support** | ✅ | ❌ |
 | **Learning Curve** | Low | Moderate |
+
+### Calq Config vs. Common Localization Approaches
+| Feature | Calq Config | .resx + IStringLocalizer | JSON Localization Libraries |
+| :--- | :--- | :--- | :--- |
+| **Translation Access** | Typed property (t.WelcomeMessage) | String key lookup (Loc["WelcomeMessage"]) | String key lookup (Loc["WelcomeMessage"]) |
+| **Storage Format** | JSON files (no build step, editable at runtime) | XML .resx (requires compilation into satellite assemblies) | JSON files (no build step, but string-key based) |
+| **Language Switching** | Change one value, all text classes reload automatically | Set thread culture, then re-resolve each localizer | Reload or re-resolve per component manually |
+| **Build Step Required** | None (runtime JSON loading) | Satellite assembly compilation | None (runtime JSON loading) |
+| **Pluralization** | Separate properties per form — no DSL needed | Framework engine required (ICU / gettext rules) | Framework engine required (ICU / gettext rules) |
+| **Translator Tooling (Crowdin, Transifex, etc.)** | ✅ | ✅ | ✅ |
+| **Compile-Time Safety** | ✅ | ❌ | ❌ |
+| **Unified with App Config** | ✅ | ❌ | ❌ |
 
 ### Code Comparison
 
@@ -318,6 +330,53 @@ IEnumerable<string> themePresets = registry.GetAvailablePresets("Theme");
 - The master preset itself always uses the `"default"` preset
 - `ReloadAllAsync()` reloads the master first, then cascades — if a child's resolved preset changed, it switches automatically
 - Configuration types without `[PresetGroup]` always use the `"default"` preset
+- The same pattern works for localization: tag text classes with `[PresetGroup("Language")]`, create one JSON file per language, and switch all translations by changing a single master preset value
+
+**Localization example:**
+
+```csharp
+class MasterPreset {
+    public string Language { get; set; } = "en";
+}
+
+[PresetGroup("Language")]
+class HomePageText {
+    public string WelcomeMessage { get; set; } = "Welcome";
+    public string SignIn { get; set; } = "Sign In";
+}
+
+[PresetGroup("Language")]
+class SharedText {
+    public string NavHome { get; set; } = "Home";
+    public string NavSettings { get; set; } = "Settings";
+}
+```
+
+```
+config/
+  MyApp.MasterPreset.default.json    → {"Language":"en"}
+  MyApp.HomePageText.en.json         → {"WelcomeMessage":"Welcome","SignIn":"Sign In"}
+  MyApp.HomePageText.es.json         → {"WelcomeMessage":"Bienvenido","SignIn":"Iniciar sesión"}
+  MyApp.SharedText.en.json           → {"NavHome":"Home","NavSettings":"Settings"}
+  MyApp.SharedText.es.json           → {"NavHome":"Inicio","NavSettings":"Configuración"}
+```
+
+```csharp
+var registry = new JsonConfigurationRegistry<MasterPreset>("/path/to/config");
+
+HomePageText home = await registry.GetAsync<HomePageText>();
+SharedText shared = await registry.GetAsync<SharedText>();
+
+Console.WriteLine(home.WelcomeMessage); // "Welcome"
+Console.WriteLine(shared.NavHome);      // "Home"
+
+// Switch language — all text classes reload automatically
+await registry.SetByPathAsync<MasterPreset>("Language", "es");
+await registry.ReloadAllAsync();
+
+Console.WriteLine(home.WelcomeMessage); // "Bienvenido"
+Console.WriteLine(shared.NavHome);      // "Inicio"
+```
 
 See also: [How to Set Up JsonConfigurationRegistry](#how-to-set-up-jsonconfigurationregistry)
 
