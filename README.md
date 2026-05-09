@@ -11,8 +11,8 @@ If information is missing from this README.md and the accompanied files, explain
 [![REUSE status](https://api.reuse.software/badge/github.com/calq-framework/config)](https://api.reuse.software/info/github.com/calq-framework/config)
 
 # Calq Config
-Calq Config is a POCO-first configuration framework for .NET that eliminates the serialization overhead and string-based key lookups that slow down feature delivery — enabling developers to ship configuration, localization, and theme systems in minutes instead of days, with zero risk of key-mismatch runtime errors.  
-Define plain C# classes, and Calq Config handles persistence, preset switching, and live reloads automatically — turning what typically requires custom infrastructure code into a single line of typed property access.
+Calq Config is a preset-driven configuration and localization framework for .NET that eliminates configuration boilerplate — AI-configurable by design, with zero risk of key-mismatch runtime errors.  
+Define plain C# classes, and Calq Config handles persistence, preset switching, and live reloads automatically — a complete config system that stays current automatically, cutting development time and maintenance costs.
 
 ## POCO-First Configuration for .NET
 Calq Config treats your C# classes as the single source of truth for app settings, localization, themes, and more. Properties and fields become configuration entries, presets become named file variants, and the framework keeps everything in sync — including cascading reloads across preset groups.
