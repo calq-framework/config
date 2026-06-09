@@ -11,104 +11,107 @@ If information is missing from this README.md and the accompanied files, explain
 [![REUSE status](https://api.reuse.software/badge/github.com/calq-framework/config)](https://api.reuse.software/info/github.com/calq-framework/config)
 
 # Calq Config
-Calq Config is a preset-driven configuration and localization framework for .NET where plain C# classes become a complete config system — automatically providing managed persistence, preset switching, and live reloads from class definitions alone, eliminating configuration infrastructure overhead and key-mismatch runtime errors.  
-Calq Config treats your C# classes as the single source of truth, making it possible to ship configuration, localization, and themes without manual wiring, builder patterns, or string-key lookups — typed class definitions give AI the structural context to generate complete localization and configuration variants, unlike string-key systems where AI lacks the context to produce correct translations. Includes Unity games configurable without opening the editor.
 
-## POCO-First Configuration for .NET
-Calq Config treats your C# classes as the single source of truth for app settings, localization, themes, and more. Properties and fields become configuration entries, presets become named file variants, and the framework keeps everything in sync — including cascading reloads across preset groups.
+Calq Config is a preset-driven configuration framework. Designed for error-free, AI-operable configuration management and localization.
 
-## How Calq Config Stacks Up
+## Table of Contents
 
-### Calq Config vs. Microsoft.Extensions.Configuration
-| Feature | Calq Config | Microsoft.Extensions.Configuration |
-| :--- | :--- | :--- |
-| **Config Objects** | Mutable POCO Singletons | Immutable POCOs (via IOptions binding) |
-| **Live Reload** | ✅ | ✅ |
-| **Named Presets** | ✅ (automatic) | ✅ (manual) |
-| **Preset Groups** | ✅ (master preset cascading) | ❌ |
-| **Preset Switching at Runtime** | ✅ | ❌ |
-| **Save Back to File** | ✅ | ❌ |
-| **Save Back to File by JSONPath** | ✅ | ❌ |
-| **Field Support** | ✅ | ❌ |
-| **Learning Curve** | Low | Moderate |
+- [Usage - Calq Config](#usage---calq-config)
+- [1. Foundations](#1-foundations)
+  - [1.1 Registry setup](#11-registry-setup)
+  - [1.2 Directory resolution](#12-directory-resolution)
+  - [1.3 File naming convention](#13-file-naming-convention)
+- [2. Binding](#2-binding)
+  - [2.1 POCO definition](#21-poco-definition)
+  - [2.2 Supported member types](#22-supported-member-types)
+  - [2.3 Collection binding](#23-collection-binding)
+- [3. Instance Lifecycle](#3-instance-lifecycle)
+  - [3.1 Instance identity](#31-instance-identity)
+  - [3.2 Saving](#32-saving)
+  - [3.3 Reload from disk](#33-reload-from-disk)
+- [4. Presets](#4-presets)
+  - [4.1 Preset switching](#41-preset-switching)
+  - [4.2 Master preset definition](#42-master-preset-definition)
+  - [4.3 Clone-on-missing behavior](#43-clone-on-missing-behavior)
+- [5. Preset Groups](#5-preset-groups)
+  - [5.1 PresetGroup attribute](#51-presetgroup-attribute)
+  - [5.2 Cascading reloads](#52-cascading-reloads)
+- [6. Preset Variants & Discovery](#6-preset-variants--discovery)
+  - [6.1 Named variants](#61-named-variants)
+  - [6.2 Preset discovery](#62-preset-discovery)
+  - [6.3 Querying preset groups](#63-querying-preset-groups)
+- [7. Change Notification](#7-change-notification)
+  - [7.1 Reload events](#71-reload-events)
+- [8. Configuration Store](#8-configuration-store)
+  - [8.1 Loading and access](#81-loading-and-access)
+- [9. Partial Updates](#9-partial-updates)
+  - [9.1 Set by path](#91-set-by-path)
+  - [9.2 Type preservation](#92-type-preservation)
+  - [9.3 Nested paths](#93-nested-paths)
+- [10. Localization Pattern](#10-localization-pattern)
+- [11. Extensibility](#11-extensibility)
+  - [11.1 Custom configuration item](#111-custom-configuration-item)
+  - [11.2 Custom configuration registry](#112-custom-configuration-registry)
+- [Quick Start](#quick-start)
+- [License](#license)
 
-### Calq Config vs. Common Localization Approaches
-| Feature | Calq Config | .resx + IStringLocalizer | JSON Localization Libraries |
-| :--- | :--- | :--- | :--- |
-| **Translation Access** | Typed property (t.WelcomeMessage) | String key lookup (Loc["WelcomeMessage"]) | String key lookup (Loc["WelcomeMessage"]) |
-| **Storage Format** | JSON files (no build step, editable at runtime) | XML .resx (requires compilation into satellite assemblies) | JSON files (no build step, but string-key based) |
-| **Language Switching** | Change one value, all text classes reload automatically | Set thread culture, then re-resolve each localizer | Reload or re-resolve per component manually |
-| **Build Step Required** | None (runtime JSON loading) | Satellite assembly compilation | None (runtime JSON loading) |
-| **Pluralization** | Separate properties per form — no DSL needed | Framework engine required (ICU / gettext rules) | Framework engine required (ICU / gettext rules) |
-| **Translator Tooling (Crowdin, Transifex, etc.)** | ✅ | ✅ | ✅ |
-| **Compile-Time Safety** | ✅ | ❌ | ❌ |
-| **Unified with App Config** | ✅ | ❌ | ❌ |
+## Usage - Calq Config
 
-### Code Comparison
+### 1. Foundations
 
-### Calq Config
-```csharp
-using CalqFramework.Config.Json;
-
-var registry = new JsonConfigurationRegistry();
-var ui = await registry.GetAsync<UiConfig>();
-
-Console.WriteLine(ui.Title);    // direct property access
-Console.WriteLine(ui.DarkMode); // always current after reloads
-```
-
-### Microsoft.Extensions.Configuration
-```csharp
-using Microsoft.Extensions.Configuration;
-
-var configuration = new ConfigurationBuilder()
-    .SetBasePath(Directory.GetCurrentDirectory())
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .Build();
-
-var ui = configuration.GetSection("UiConfig").Get<UiConfig>();
-
-Console.WriteLine(ui.Title);
-Console.WriteLine(ui.DarkMode);
-```
-
-## Usage
-
-### 1. Application Setup & Initialization
-
-*How to bootstrap the configuration registry and start loading configuration.*
-
-#### How to Set Up JsonConfigurationRegistry
+#### 1.1 Registry setup
 
 `JsonConfigurationRegistry` is the main entry point. It manages a directory of JSON files, one per configuration type per preset.
 
 ```csharp
 using CalqFramework.Config.Json;
 
-// Default directory resolution:
-// 1. {AppContext.BaseDirectory}/config (if it exists)
-// 2. {AppData}/{ProcessName}
+// Default directory resolution
 var registry = new JsonConfigurationRegistry();
 
-// Or specify a directory explicitly
+// Explicit directory
 var registry = new JsonConfigurationRegistry("/path/to/config");
+
+// With preset group orchestration
+var registry = new JsonConfigurationRegistry<MasterPreset>("/path/to/config");
 ```
 
 **Key points:**
-- The directory is created automatically if it doesn't exist
-- File naming convention: `{FullTypeName}.{preset}.json` (e.g., `MyApp.UiConfig.dark.json`)
 - `JsonConfigurationRegistry` (non-generic) disables preset group logic — all items use the `"default"` preset unless switched manually
-- `JsonConfigurationRegistry<TPreset>` enables preset group cascading from a master preset POCO
+- `JsonConfigurationRegistry<TPreset>` enables preset group cascading from a master preset POCO (covered in [5. Preset Groups](#5-preset-groups) below)
+- The directory is created automatically if it doesn't exist
 
-See also: [How to Use Preset Groups with a Master Preset](#how-to-use-preset-groups-with-a-master-preset)
+#### 1.2 Directory resolution
 
----
+When no directory is specified, the registry resolves the configuration directory automatically.
 
-### 2. Configuration Items
+**Key points:**
+- First choice: `{AppContext.BaseDirectory}/config` (if the directory exists)
+- Fallback: `{AppData}/{ProcessName}`
 
-*How to define, load, save, and reload configuration.*
+See also: [1.1 Registry setup](#11-registry-setup)
 
-#### How to Define Configuration POCOs
+#### 1.3 File naming convention
+
+Each configuration type is stored as a separate JSON file per preset.
+
+```
+config/
+  MyApp.AppSettings.default.json
+  MyApp.UiConfig.dark.json
+  MyApp.UiConfig.light.json
+```
+
+**Key points:**
+- Format: `{FullTypeName}.{preset}.json`
+- Original casing is preserved in JSON output (no camelCase transformation)
+- Case-insensitive matching is used when reading JSON back into the POCO
+
+See also: [1.1 Registry setup](#11-registry-setup)
+
+### 2. Binding
+
+#### 2.1 POCO definition
 
 Configuration types are plain C# classes with a parameterless constructor. Properties and fields with public getters/setters become configuration entries.
 
@@ -121,64 +124,51 @@ class AppSettings {
 }
 ```
 
-**Supported member types:**
+**Key points:**
+- Default values in the class definition serve as fallbacks when the JSON file is missing or incomplete
+
+#### 2.2 Supported member types
+
+**Key points:**
 - Properties with public get/set
 - Public fields
 - Collections: `List<T>`, `HashSet<T>`, `Dictionary<TKey, TValue>`, and other `ICollection<T>` implementations
 - Any type serializable by Newtonsoft.Json
 
-**Key points:**
-- Default values in the class definition serve as fallbacks when the JSON file is missing or incomplete
-- Original casing is preserved in JSON (no camelCase transformation)
-- Case-insensitive matching is used when reading JSON back into the POCO
+See also: [2.1 POCO definition](#21-poco-definition)
 
-#### How to Load and Access Configuration
+#### 2.3 Collection binding
 
-Use `GetAsync<T>()` to load a configuration item. The first call deserializes from disk; subsequent calls return the same instance.
+Collections are cleared and repopulated on reload — the same collection instance is reused.
 
 ```csharp
-var registry = new JsonConfigurationRegistry();
-
-AppSettings settings = await registry.GetAsync<AppSettings>();
-Console.WriteLine(settings.Host); // "localhost" or value from JSON file
-
-// Same instance every time
-AppSettings same = await registry.GetAsync<AppSettings>();
-Assert.Same(settings, same);
+class AppSettings {
+    public List<string> AllowedOrigins { get; set; } = new();
+    public Dictionary<string, int> Limits { get; set; } = new();
+    public HashSet<string> Tags { get; set; } = new();
+}
 ```
 
-**`LoadAsync<T>()` is an alias for `GetAsync<T>()`** — both return the same singleton instance.
-
 **Key points:**
-- The returned object reference is stable — it survives reloads and always reflects the latest state
-- If no JSON file exists, the POCO retains its default values
-- Thread-safe via `ConcurrentDictionary` internally
+- `List<T>`: cleared via `Clear()`, repopulated via `Add()`
+- `Dictionary<TKey, TValue>`: cleared via `Clear()`, repopulated via indexer
+- `HashSet<T>` and other `ICollection<T>`: cleared via `Clear()`, repopulated via `Add()`
+- Object identity of the collection is preserved across reloads
 
-#### How to Save Configuration
+See also: [2.1 POCO definition](#21-poco-definition)
 
-`SaveAsync<T>()` serializes the current POCO state to its JSON file.
+### 3. Instance Lifecycle
 
-```csharp
-var registry = new JsonConfigurationRegistry();
-AppSettings settings = await registry.GetAsync<AppSettings>();
+#### 3.1 Instance identity
 
-settings.Host = "example.com";
-settings.Port = 443;
-await registry.SaveAsync<AppSettings>();
-// Writes to: {configDir}/MyApp.AppSettings.default.json
-```
-
-#### How to Reload Configuration
-
-`ReloadAsync<T>()` re-reads the JSON file and populates the existing POCO instance in-place.
+The returned object reference is stable — it survives reloads and always reflects the latest state.
 
 ```csharp
 var registry = new JsonConfigurationRegistry();
 AppSettings settings = await registry.GetAsync<AppSettings>();
-AppSettings reference = settings; // hold a reference
+AppSettings reference = settings;
 
 // External process edits the JSON file...
-
 await registry.ReloadAsync<AppSettings>();
 
 // Same object, updated values
@@ -186,48 +176,53 @@ Assert.Same(reference, settings);
 Console.WriteLine(settings.Host); // reflects the file change
 ```
 
-**Collection reload behavior:**
+**Key points:**
+- Reload populates the existing POCO instance in-place — object identity is preserved
 - Collections are cleared and repopulated (not replaced) — the same `List<T>`, `Dictionary<TKey, TValue>`, or `HashSet<T>` instance is reused
-- Items removed from the JSON file are removed from the collection
-- Items added to the JSON file are added to the collection
+- Items removed from the JSON file are removed from the collection; items added are added
 
-**Reload events:**
+See also: [2.3 Collection binding](#23-collection-binding)
 
-```csharp
-var item = new JsonConfigurationItem<AppSettings>("/path/to/config", "default");
-item.OnReloaded += () => Console.WriteLine("Config reloaded");
-await item.ReloadAsync();
-```
+#### 3.2 Saving
 
-See also: [How to Use Partial Updates](#how-to-use-partial-updates)
-
----
-
-### 3. Presets
-
-*How to manage named configuration variants.*
-
-#### How to Work with Presets
-
-Each configuration type can have multiple named presets, stored as separate JSON files. The default preset is `"default"`.
-
-**File layout:**
-```
-config/
-  MyApp.UiConfig.default.json
-  MyApp.UiConfig.dark.json
-  MyApp.UiConfig.light.json
-```
-
-**Discovering available presets:**
+`SaveAsync<T>()` serializes the current POCO state to its JSON file.
 
 ```csharp
-var item = new JsonConfigurationItem<UiConfig>("/path/to/config", "default");
-IEnumerable<string> presets = item.AvailablePresets;
-// ["default", "dark", "light"]
+var registry = new JsonConfigurationRegistry();
+AppSettings settings = await registry.GetAsync<AppSettings>();
+settings.Host = "example.com";
+settings.Port = 443;
+await registry.SaveAsync<AppSettings>();
+// Writes to: {configDir}/MyApp.AppSettings.default.json
 ```
 
-**Switching presets:**
+See also: [1.3 File naming convention](#13-file-naming-convention)
+
+#### 3.3 Reload from disk
+
+`ReloadAsync<T>()` re-reads the JSON file and populates the existing POCO instance in-place.
+
+```csharp
+var registry = new JsonConfigurationRegistry();
+AppSettings settings = await registry.GetAsync<AppSettings>();
+
+// External process edits the JSON file...
+await registry.ReloadAsync<AppSettings>();
+Console.WriteLine(settings.Host); // reflects the file change
+```
+
+**Key points:**
+- Object identity is preserved — the same POCO instance is reused
+- Collection instances are preserved — cleared and repopulated
+- If the JSON file doesn't exist, the POCO retains its current state
+
+See also: [3.1 Instance identity](#31-instance-identity), [2.3 Collection binding](#23-collection-binding)
+
+### 4. Presets
+
+#### 4.1 Preset switching
+
+Setting `Preset` triggers an automatic reload from the new preset's file.
 
 ```csharp
 var item = new JsonConfigurationItem<UiConfig>("/path/to/config", "default");
@@ -238,22 +233,11 @@ item.Preset = "dark";
 Console.WriteLine(item.Item.DarkMode); // true
 ```
 
-**Key points:**
-- Setting `Preset` triggers an automatic reload from the new preset's file
-- If the target preset file doesn't exist, the current POCO state is saved to it first (clone behavior), then reloaded
-- Available presets are discovered by globbing `{TypeName}.*.json` in the config directory
+See also: [3.3 Reload from disk](#33-reload-from-disk), [1.3 File naming convention](#13-file-naming-convention)
 
----
+#### 4.2 Master preset definition
 
-### 4. Preset Groups & Master Preset
-
-*How to orchestrate multiple configuration types from a single master preset.*
-
-#### How to Use Preset Groups with a Master Preset
-
-Use `JsonConfigurationRegistry<TPreset>` with `[PresetGroup]` attributes to let a master preset control which preset file is loaded for each configuration type.
-
-**Define a master preset:**
+Use `JsonConfigurationRegistry<TPreset>` with a master preset POCO to orchestrate which preset file is loaded for each configuration type.
 
 ```csharp
 class MasterPreset {
@@ -262,7 +246,27 @@ class MasterPreset {
 }
 ```
 
-**Tag configuration types with `[PresetGroup]`:**
+**Key points:**
+- The master preset itself always uses the `"default"` preset
+- Each property on the master preset corresponds to a preset group name (mapped via `[PresetGroup]` in [5.1 PresetGroup attribute](#51-presetgroup-attribute) below)
+
+See also: [1.1 Registry setup](#11-registry-setup)
+
+#### 4.3 Clone-on-missing behavior
+
+If the target preset file doesn't exist, the current POCO state is saved to it first, then reloaded.
+
+**Key points:**
+- This creates a new preset file initialized with the current in-memory state
+- Subsequent switches to the same preset load from the newly created file
+
+See also: [4.1 Preset switching](#41-preset-switching), [3.2 Saving](#32-saving)
+
+### 5. Preset Groups
+
+#### 5.1 PresetGroup attribute
+
+`[PresetGroup("PropertyName")]` maps a configuration type to a property on the master preset POCO.
 
 ```csharp
 [PresetGroup("Theme")]
@@ -290,7 +294,6 @@ config/
 ```
 
 **Usage:**
-
 ```csharp
 var registry = new JsonConfigurationRegistry<MasterPreset>("/path/to/config");
 
@@ -301,13 +304,17 @@ RegionConfig region = await registry.GetAsync<RegionConfig>();
 // Loaded from RegionConfig.us.json (because MasterPreset.Region == "us")
 ```
 
-**Cascading reloads:**
+**Key points:**
+- Configuration types without `[PresetGroup]` always use the `"default"` preset
+
+See also: [4.2 Master preset definition](#42-master-preset-definition), [4.1 Preset switching](#41-preset-switching), [1.3 File naming convention](#13-file-naming-convention)
+
+#### 5.2 Cascading reloads
 
 `ReloadAllAsync()` reloads the master preset first, then cascades to all child items — switching their preset files if the master's values changed.
 
 ```csharp
 // External edit changes MasterPreset.default.json: Theme = "light"
-
 await registry.ReloadAllAsync();
 
 // ui is now populated from UiConfig.light.json
@@ -315,7 +322,40 @@ Console.WriteLine(ui.Title);    // "Light UI"
 Console.WriteLine(ui.DarkMode); // false
 ```
 
-**Querying preset groups:**
+**Key points:**
+- If a child's resolved preset changed, it switches automatically
+- If a child's resolved preset is unchanged, it reloads from the same file
+
+See also: [5.1 PresetGroup attribute](#51-presetgroup-attribute), [4.1 Preset switching](#41-preset-switching), [3.3 Reload from disk](#33-reload-from-disk)
+
+### 6. Preset Variants & Discovery
+
+#### 6.1 Named variants
+
+Each configuration type can have multiple named presets, stored as separate JSON files. The default preset is `"default"`.
+
+```
+config/
+  MyApp.UiConfig.default.json
+  MyApp.UiConfig.dark.json
+  MyApp.UiConfig.light.json
+```
+
+See also: [1.3 File naming convention](#13-file-naming-convention)
+
+#### 6.2 Preset discovery
+
+Available presets are discovered by globbing `{TypeName}.*.json` in the config directory.
+
+```csharp
+var item = new JsonConfigurationItem<UiConfig>("/path/to/config", "default");
+IEnumerable<string> presets = item.AvailablePresets;
+// ["default", "dark", "light"]
+```
+
+See also: [6.1 Named variants](#61-named-variants), [1.3 File naming convention](#13-file-naming-convention)
+
+#### 6.3 Querying preset groups
 
 ```csharp
 IEnumerable<string> groups = registry.AvailablePresetGroups;
@@ -325,14 +365,96 @@ IEnumerable<string> themePresets = registry.GetAvailablePresets("Theme");
 // ["dark", "light"]
 ```
 
-**Key points:**
-- `[PresetGroup("PropertyName")]` maps a configuration type to a property on the master preset POCO
-- The master preset itself always uses the `"default"` preset
-- `ReloadAllAsync()` reloads the master first, then cascades — if a child's resolved preset changed, it switches automatically
-- Configuration types without `[PresetGroup]` always use the `"default"` preset
-- The same pattern works for localization: tag text classes with `[PresetGroup("Language")]`, create one JSON file per language, and switch all translations by changing a single master preset value
+See also: [6.2 Preset discovery](#62-preset-discovery), [5.1 PresetGroup attribute](#51-presetgroup-attribute)
 
-**Localization example:**
+### 7. Change Notification
+
+#### 7.1 Reload events
+
+```csharp
+var item = new JsonConfigurationItem<AppSettings>("/path/to/config", "default");
+item.OnReloaded += () => Console.WriteLine("Config reloaded");
+await item.ReloadAsync();
+```
+
+**Key points:**
+- `OnReloaded` fires after every successful reload, including preset switches
+- Subscribe before the first `ReloadAsync()` call to receive all notifications
+
+See also: [3.3 Reload from disk](#33-reload-from-disk), [4.1 Preset switching](#41-preset-switching), [5.2 Cascading reloads](#52-cascading-reloads)
+
+### 8. Configuration Store
+
+#### 8.1 Loading and access
+
+`GetAsync<T>()` loads a configuration item. The first call deserializes from disk; subsequent calls return the same instance.
+
+```csharp
+var registry = new JsonConfigurationRegistry();
+AppSettings settings = await registry.GetAsync<AppSettings>();
+Console.WriteLine(settings.Host); // "localhost" or value from JSON file
+
+// Same instance every time
+AppSettings same = await registry.GetAsync<AppSettings>();
+Assert.Same(settings, same);
+```
+
+**Key points:**
+- `LoadAsync<T>()` is an alias for `GetAsync<T>()` — both return the same singleton instance
+- If no JSON file exists, the POCO retains its default values
+- Thread-safe via `ConcurrentDictionary` internally
+
+See also: [2.1 POCO definition](#21-poco-definition), [3.1 Instance identity](#31-instance-identity), [4.1 Preset switching](#41-preset-switching)
+
+### 9. Partial Updates
+
+#### 9.1 Set by path
+
+`SetByPathAsync` modifies a single value in the JSON file by dot-separated path, then reloads the POCO to stay in sync.
+
+```csharp
+var registry = new JsonConfigurationRegistry();
+AppSettings settings = await registry.GetAsync<AppSettings>();
+
+// Update a single value — writes to file and reloads
+await registry.SetByPathAsync<AppSettings>("Host", "example.com");
+await registry.SetByPathAsync<AppSettings>("Port", "443");
+
+Console.WriteLine(settings.Host); // "example.com"
+Console.WriteLine(settings.Port); // 443
+```
+
+**Key points:**
+- The POCO is reloaded after the file write to stay in sync
+- Useful for CLI tools or APIs that need to set individual config values without loading the full object
+
+See also: [3.3 Reload from disk](#33-reload-from-disk), [3.2 Saving](#32-saving)
+
+#### 9.2 Type preservation
+
+**Key points:**
+- If the existing JSON value is an integer, the new string value is parsed as integer
+- If the existing JSON value is a float, the new string value is parsed as float
+- If the existing JSON value is a boolean, the new string value is parsed as boolean
+- If the path doesn't exist or the value is a string, the value is stored as-is
+
+See also: [9.1 Set by path](#91-set-by-path)
+
+#### 9.3 Nested paths
+
+```csharp
+await registry.SetByPathAsync<AppSettings>("Nested.DeepValue", "42");
+// Creates intermediate objects if they don't exist in the JSON
+```
+
+**Key points:**
+- Missing path segments are created automatically as JSON objects
+
+See also: [9.1 Set by path](#91-set-by-path), [2.1 POCO definition](#21-poco-definition)
+
+### 10. Localization Pattern
+
+The same preset group mechanism supports localization: tag text classes with `[PresetGroup("Language")]`, create one JSON file per language, and switch all translations by changing a single master preset value.
 
 ```csharp
 class MasterPreset {
@@ -378,54 +500,13 @@ Console.WriteLine(home.WelcomeMessage); // "Bienvenido"
 Console.WriteLine(shared.NavHome);      // "Inicio"
 ```
 
-See also: [How to Set Up JsonConfigurationRegistry](#how-to-set-up-jsonconfigurationregistry)
+See also: [5.1 PresetGroup attribute](#51-presetgroup-attribute), [5.2 Cascading reloads](#52-cascading-reloads), [9.1 Set by path](#91-set-by-path)
 
----
+### 11. Extensibility
 
-### 5. Partial Updates
+#### 11.1 Custom configuration item
 
-*How to modify individual values without full serialization round-trips.*
-
-#### How to Use Partial Updates
-
-`SetByPathAsync` modifies a single value in the JSON file by dot-separated path, then reloads the POCO to stay in sync.
-
-```csharp
-var registry = new JsonConfigurationRegistry();
-AppSettings settings = await registry.GetAsync<AppSettings>();
-
-// Update a single value — writes to file and reloads
-await registry.SetByPathAsync<AppSettings>("Host", "example.com");
-await registry.SetByPathAsync<AppSettings>("Port", "443");
-
-Console.WriteLine(settings.Host); // "example.com"
-Console.WriteLine(settings.Port); // 443
-```
-
-**Nested paths:**
-
-```csharp
-await registry.SetByPathAsync<AppSettings>("Nested.DeepValue", "42");
-// Creates intermediate objects if they don't exist in the JSON
-```
-
-**Key points:**
-- Type preservation: if the existing JSON value is an integer, the new string value is parsed as integer
-- Missing path segments are created automatically
-- The POCO is reloaded after the file write to stay in sync
-- Useful for CLI tools or APIs that need to set individual config values without loading the full object
-
----
-
-### 6. Extensibility
-
-*How to implement custom storage backends.*
-
-#### How to Create a Custom Backend
-
-The JSON implementation is one backend. You can create others (database, remote API, YAML, etc.) by extending `ConfigurationItemBase<T>` and `ConfigurationRegistryBase<T>`.
-
-**Custom configuration item:**
+The JSON implementation is one backend. Create others (database, remote API, YAML, etc.) by extending `ConfigurationItemBase<T>`.
 
 ```csharp
 using CalqFramework.Config;
@@ -439,7 +520,6 @@ class DatabaseConfigurationItem<TItem> : ConfigurationItemBase<TItem> where TIte
 
     public override IEnumerable<string> AvailablePresets {
         get {
-            // Query database for available presets
             return QueryPresets(_connectionString, typeof(TItem).FullName!);
         }
     }
@@ -463,12 +543,19 @@ class DatabaseConfigurationItem<TItem> : ConfigurationItemBase<TItem> where TIte
     protected override bool PresetExists(string preset) {
         return CheckPresetExists(_connectionString, typeof(TItem).FullName!, preset);
     }
-
-    // ... database helper methods
 }
 ```
 
-**Custom configuration registry:**
+**Key points:**
+- `ConfigurationItemBase<T>` handles preset group attribute caching, preset switching logic, and the `OnReloaded` event
+- Your backend only needs to implement: `ReloadAsync`, `SaveAsync`, `SetByPathAsync`, `AvailablePresets`, `PresetExists`
+- Call `RaiseOnReloaded()` at the end of `ReloadAsync` to fire the `OnReloaded` event
+
+See also: [7.1 Reload events](#71-reload-events), [9.1 Set by path](#91-set-by-path), [4.1 Preset switching](#41-preset-switching)
+
+#### 11.2 Custom configuration registry
+
+Extend `ConfigurationRegistryBase<T>` to provide the registry orchestration for your custom backend.
 
 ```csharp
 class DatabaseConfigurationRegistry<TPreset> : ConfigurationRegistryBase<TPreset> where TPreset : class, new() {
@@ -485,10 +572,11 @@ class DatabaseConfigurationRegistry<TPreset> : ConfigurationRegistryBase<TPreset
 ```
 
 **Key points:**
-- `ConfigurationItemBase<T>` handles preset group attribute caching, preset switching logic, and the `OnReloaded` event
 - `ConfigurationRegistryBase<T>` handles the item dictionary, master preset cascading, and `ReloadAllAsync` orchestration
 - Call `Initialize()` in your registry constructor — it creates the master preset item
-- Your backend only needs to implement the storage operations: read, write, list presets, check existence
+- Override `CreateItem<TItem>` to return your custom `ConfigurationItemBase<T>` implementation
+
+See also: [11.1 Custom configuration item](#111-custom-configuration-item), [5.2 Cascading reloads](#52-cascading-reloads), [1.1 Registry setup](#11-registry-setup)
 
 ## Quick Start
 
@@ -504,14 +592,12 @@ Replace `Program.cs` with:
 using CalqFramework.Config.Json;
 
 var registry = new JsonConfigurationRegistry();
-
 var settings = await registry.GetAsync<AppSettings>();
 Console.WriteLine($"Host: {settings.Host}, Port: {settings.Port}");
 
 settings.Host = "example.com";
 settings.Port = 443;
 await registry.SaveAsync<AppSettings>();
-
 Console.WriteLine($"Host: {settings.Host}, Port: {settings.Port}");
 
 class AppSettings {
@@ -526,4 +612,5 @@ dotnet run
 ```
 
 ## License
+
 Calq Config is dual-licensed under PolyForm Noncommercial (with Evaluation Grant) and the Calq Commercial License.
