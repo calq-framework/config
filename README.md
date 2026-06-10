@@ -14,6 +14,26 @@ If information is missing from this README.md and the accompanied files, explain
 
 Calq Config is a preset-driven configuration framework. Designed for error-free, AI-operable configuration management and localization.
 
+## Comparison
+
+| Feature | Calq Config | DI Options Pattern | Manual File Deserialization | External Config Services | Environment Variable Libraries |
+|---|---|---|---|---|---|
+| Runtime preset switching | ✅ single assignment, auto-reload | ❌ restart or rebuild | ❌ user responsibility | ⚠️ feature flags / label filters | ❌ restart required |
+| Coordinated multi-type switching | ✅ master preset cascades all types | ❌ | ❌ user responsibility | ⚠️ label namespaces | ❌ |
+| New presets from current state | ✅ automatic | ❌ | ❌ user responsibility | ❌ | ❌ |
+| Stable object identity across reloads | ✅ same instance | ⚠️ new instance per change | ❌ new instance | ⚠️ new snapshot | ❌ restart required |
+| Partial update by path | ✅ built-in | ❌ full rebind | ⚠️ manual JSON patching | ✅ key-value write | ❌ |
+| No DI container required | ✅ | ❌ requires service collection | ✅ | ⚠️ SDK often assumes DI | ✅ |
+| Zero-ceremony setup | ✅ auto-resolved directory + POCO defaults | ⚠️ builder + bind + registration | ✅ one-liner | ❌ provisioning + connection | ✅ |
+| Built-in localization pattern | ✅ preset groups per language | ❌ separate localization stack | ❌ user responsibility | ⚠️ label per locale | ❌ |
+| Change notification | ✅ | ✅ | ❌ user responsibility | ✅ | ❌ |
+| AI-operability | ✅ plain classes, self-describing file layout | ⚠️ DI registration + section path strings | ⚠️ schema not discoverable at runtime | ⚠️ cloud API + auth prerequisite | ⚠️ flat key-value, no structure |
+| Plain-code model | ✅ plain POCO, no attributes | ⚠️ no base class, but DI ceremony | ✅ plain POCO | ⚠️ SDK annotations | ✅ flat only |
+| Multi-backend extensibility | ✅ | ✅ custom providers | ✅ any serializer | ✅ native | ❌ |
+| Multi-source merge | ❌ single source per type | ✅ layered providers | ❌ user responsibility | ✅ layered with fallback | ⚠️ env only |
+| Validation | ❌ | ✅ DataAnnotations + custom | ❌ user responsibility | ⚠️ varies | ❌ |
+| Secret management | ❌ user responsibility | ✅ Secret Manager + Key Vault | ❌ user responsibility | ✅ native | ⚠️ insecure at rest |
+
 ## Table of Contents
 
 - [Usage - Calq Config](#usage---calq-config)
